@@ -54,6 +54,7 @@
         .mute-btn { position: fixed; top: 15px; right: 15px; z-index: 9999; font-size: 1.2rem;
             background: #222; border: 3px solid #00ffff; border-radius: 8px; padding: 8px 12px; cursor: pointer;
             box-shadow: 0 0 15px rgba(0,255,255,.5); }
+        #musicBtn { right: 75px; border-color: #ff00ff; box-shadow: 0 0 15px rgba(255,0,255,.5); }
 
         #flashBanner { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
             z-index: 9990; pointer-events: none; opacity: 0; }
@@ -80,6 +81,7 @@
             text-shadow: 2px 2px 0 rgba(0,0,0,.5); }
         .pixel-btn:hover { transform: translateY(-3px); box-shadow: 0 0 30px rgba(255,0,255,.8), inset 0 -5px 0 rgba(0,0,0,.3); }
         .pixel-btn:active { transform: translateY(1px); }
+        .pixel-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
         .pixel-btn-primary { background: linear-gradient(180deg, #ffff00 0%, #ffcc00 100%); border-color: #ff00ff; color: #000;
             font-size: 1rem; padding: 25px 40px; box-shadow: 0 0 30px rgba(255,255,0,.8), inset 0 -5px 0 rgba(0,0,0,.3);
             animation: pulse 2s ease-in-out infinite; }
@@ -203,7 +205,6 @@
             border: 3px solid #ff00ff; background: #222; color: #fff; font-size: 1rem; cursor: pointer;
             box-shadow: 0 0 20px rgba(255,0,255,.6); z-index: 2; }
 
-        /* ===== ПРОФИЛЬ ===== */
         #profile { display: none; flex-direction: column; align-items: center; padding: 40px 20px;
             min-height: 100vh; position: relative; z-index: 10; }
         #profile.active { display: flex; }
@@ -239,7 +240,6 @@
         .badge.locked { opacity: .35; filter: grayscale(1); }
         .badge.mystery { opacity: .55; }
 
-        /* ===== МАГАЗИН ===== */
         #shop { display: none; flex-direction: column; align-items: center; padding: 40px 20px;
             min-height: 100vh; position: relative; z-index: 10; }
         #shop.active { display: flex; }
@@ -253,7 +253,6 @@
         .shop-item.owned { border-color: #4dff88; box-shadow: 0 0 15px rgba(77,255,136,.35); }
         .shop-item .pixel-btn { padding: 10px 14px; font-size: .55rem; animation: none; }
 
-        /* ===== ВЫБОР СИМВОЛА ===== */
         #pickOverlay { position: fixed; inset: 0; z-index: 9996; display: flex; align-items: center;
             justify-content: center; background: rgba(0,0,0,.9); padding: 20px; }
         #pickOverlay.hidden { display: none; }
@@ -277,14 +276,17 @@
             .avatar-grid { grid-template-columns: repeat(4, 1fr); }
             .shop-item { width: 46%; }
             #dustBadge { font-size: .6rem; padding: 6px 8px; }
+            #musicBtn { right: 65px; }
         }
     </style>
 </head>
 <body>
+    <audio id="bgMusic" src="music.mp3" loop preload="auto"></audio>
     <div id="boot"><pre id="bootText"></pre></div>
     <div class="stars" id="stars"></div>
     <div class="crt-overlay"></div>
     <div id="dustBadge" onclick="showShop()">✨ 0</div>
+    <button class="mute-btn" id="musicBtn" onclick="toggleMusic()">🎵</button>
     <button class="mute-btn" id="muteBtn" onclick="toggleMute()">🔊</button>
     <div id="flashBanner"><div class="txt"></div></div>
 
@@ -424,12 +426,21 @@
             try { if (METRICA_ID && window.ym) window.ym(METRICA_ID, 'reachGoal', goal); } catch(e) {}
         }
 
+        // ===== ЦЕЛОСТНОСТЬ СОХРАНЕНИЙ (АНТИЧИТ) =====
+        const SALT = 'wish3000-integrity-v2';
+        function sigOf(st) {
+            const c = Object.assign({}, st);
+            delete c.__sig;
+            return hashStr(JSON.stringify(c) + SALT);
+        }
+
         // ===== BIOS BOOT =====
         const bootLines = [
             'WISH-MACHINE 3000 BIOS v2.6',
             'CHECKING MEMORY... OK',
             'LOADING PIXEL SYMBOLS... 16 FOUND',
             'CALIBRATING RARITY... 5 LEVELS',
+            'ANTI-CHEAT MODULE... ACTIVE',
             'SEARCHING FOR COINS... 0 FOUND',
             '',
             '> INSERT COIN'
@@ -541,7 +552,6 @@
         const rarityColors = { common:'#888888', rare:'#4169e1', epic:'#9370db', legendary:'#ffd700', secret:'#ff00ff' };
         const dustByRarity = { common:1, rare:3, epic:7, legendary:15, secret:50 };
 
-        // ===== АВАТАРЫ =====
         const AVATARS = [
             { name:'Улыбка',  c:{a:'#ffd700',b:'#1a1a2e'}, map:[".aaaaaa.","aaaaaaaa","abbaabba","aaaaaaaa","aaaaaaaa","abaaaaba",".abbbba.","..aaaa.."] },
             { name:'Подмиг',  c:{a:'#ffd700',b:'#1a1a2e'}, map:[".aaaaaa.","aaaaaaaa","aabaabba","aaaaaaaa","aaaaaaaa","abaaaaba",".abbbba.","..aaaa.."] },
@@ -574,7 +584,6 @@
             }));
         }
 
-        // ===== МАГАЗИН =====
         const SHOP = [
             { id:'bonus_wish',   n:'Бонусное желание',    d:'Личный спин вне очереди (1 раз в день)', i:'🎁', price:25,  type:'consumable' },
             { id:'symbol_order', n:'Заказ символа',       d:'Карточка с символом на твой выбор',      i:'📦', price:40,  type:'consumable' },
@@ -588,7 +597,6 @@
             { id:'frame_gold',   n:'Золотая рамка',       d:'Золотая рамка профиля и сохранений',     i:'🖼️', price:70,  type:'frame' }
         ];
 
-        // ===== ДОСТИЖЕНИЯ =====
         const ACH = {
             first_spin:   { n:'Первая монета',        d:'Сделать первый спин',                  i:'🪙' },
             three_wishes: { n:'Закон трёх',           d:'Завершить ритуал трёх желаний',        i:'📜' },
@@ -682,11 +690,18 @@
         let bonusUsed = false, keyBuf = '', pendingDaily = null, cdTimer = null;
 
         function loadState() {
-            let st = null;
+            let st = null, wiped = false;
             try { st = JSON.parse(localStorage.getItem(LS_STATE)); } catch(e) {}
-            if (!st || typeof st !== 'object') {
+            if (st && typeof st === 'object') {
+                if (st.__sig !== sigOf(st)) {
+                    wiped = true;
+                    try { localStorage.removeItem(LS_STATE); localStorage.removeItem('wishMachineV2'); } catch(e) {}
+                    st = null;
+                }
+            } else st = null;
+            if (!st) {
                 let old = null;
-                try { old = JSON.parse(localStorage.getItem('wishMachineV2')); } catch(e) {}
+                if (!wiped) { try { old = JSON.parse(localStorage.getItem('wishMachineV2')); } catch(e) {} }
                 if (old && Array.isArray(old) && old.length === 3 && old.every(c => c && c.symbol && c.rarity)) {
                     st = { baseDone:true, baseCards:old, daily:{}, streak:0, lastDaily:null };
                 } else {
@@ -703,7 +718,10 @@
             st.shop = st.shop || { owned:[], insurance:0, lastBonusDate:null, skin:'', frame:'' };
             return st;
         }
-        function saveState() { localStorage.setItem(LS_STATE, JSON.stringify(state)); }
+        function saveState() {
+            state.__sig = sigOf(state);
+            localStorage.setItem(LS_STATE, JSON.stringify(state));
+        }
 
         function addDust(n) {
             state.dust += n;
@@ -763,40 +781,55 @@
             };
         }
 
+        // ===== МУЗЫКА =====
+        const bgMusic = document.getElementById('bgMusic');
+        let musicOn = true;
+        bgMusic.volume = 0.4;
+        bgMusic.loop = true;
+        function tryMusic() { if (musicOn) bgMusic.play().catch(()=>{}); }
+        tryMusic();
+        ['pointerdown','keydown','touchstart'].forEach(ev =>
+            window.addEventListener(ev, function h(){ tryMusic(); window.removeEventListener(ev, h); }, { once:true })
+        );
+        bgMusic.addEventListener('error', () => { document.getElementById('musicBtn').style.display = 'none'; });
+        function toggleMusic() {
+            musicOn = !musicOn;
+            if (musicOn) bgMusic.play().catch(()=>{}); else bgMusic.pause();
+            document.getElementById('musicBtn').textContent = musicOn ? '🎵' : '🚫';
+        }
+
         // ===== ЗВУК =====
         let audioCtx = null;
         function ctx() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); return audioCtx; }
         function toggleMute() { muted = !muted; document.getElementById('muteBtn').textContent = muted ? '🔇' : '🔊'; }
-        function playSound(type) {
-            if (muted) return;
+        function beep(freq, dur, wave, vol, when, slideTo) {
             const ac = ctx();
-            if (type === 'coin') {
-                const o = ac.createOscillator(), g = ac.createGain();
-                o.connect(g); g.connect(ac.destination);
-                o.frequency.setValueAtTime(800, ac.currentTime);
-                o.frequency.exponentialRampToValueAtTime(400, ac.currentTime + .1);
-                g.gain.setValueAtTime(.3, ac.currentTime);
-                g.gain.exponentialRampToValueAtTime(.01, ac.currentTime + .1);
-                o.start(); o.stop(ac.currentTime + .1);
-            } else if (type === 'spin') {
-                const o = ac.createOscillator(), g = ac.createGain();
-                o.type = 'square'; o.connect(g); g.connect(ac.destination);
-                o.frequency.setValueAtTime(200, ac.currentTime);
-                g.gain.setValueAtTime(.1, ac.currentTime);
-                g.gain.exponentialRampToValueAtTime(.01, ac.currentTime + .05);
-                o.start(); o.stop(ac.currentTime + .05);
-            } else {
-                const notes = type === 'legendary' ? [523,659,784,1047,1319] : [523,659,784];
-                notes.forEach((f,i) => {
-                    const o = ac.createOscillator(), g = ac.createGain();
-                    o.type = type === 'legendary' ? 'square' : 'triangle';
-                    o.connect(g); g.connect(ac.destination); o.frequency.value = f;
-                    g.gain.setValueAtTime(.35, ac.currentTime + i*.12);
-                    g.gain.exponentialRampToValueAtTime(.01, ac.currentTime + i*.12 + .25);
-                    o.start(ac.currentTime + i*.12); o.stop(ac.currentTime + i*.12 + .25);
-                });
-            }
+            const o = ac.createOscillator(), g = ac.createGain();
+            o.type = wave || 'square';
+            o.connect(g); g.connect(ac.destination);
+            const t = ac.currentTime + (when || 0);
+            o.frequency.setValueAtTime(freq, t);
+            if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+            g.gain.setValueAtTime(vol, t);
+            g.gain.exponentialRampToValueAtTime(.01, t + dur);
+            o.start(t); o.stop(t + dur);
         }
+        function playSound(type, opt) {
+            if (muted) return;
+            if (type === 'coin') { beep(800, .1, 'square', .3, 0, 400); }
+            else if (type === 'lever') { beep(250, .2, 'square', .25, 0, 70); beep(90, .08, 'square', .3, .18); }
+            else if (type === 'stop') { beep([300,260,220][opt || 0], .09, 'square', .22); }
+            else if (type === 'flip') { beep(500, .12, 'triangle', .2, 0, 900); }
+            else if (type === 'click') { beep(700, .04, 'triangle', .15); }
+            else if (type === 'deny') { beep(160, .15, 'square', .2); beep(120, .18, 'square', .2, .1); }
+            else if (type === 'buy') { beep(600, .08, 'square', .25); beep(900, .12, 'square', .25, .09); }
+            else if (type === 'box') { beep(500, .07, 'triangle', .25); beep(650, .07, 'triangle', .25, .08); beep(800, .1, 'triangle', .25, .16); }
+            else if (type === 'win') { [523,659,784].forEach((f,i) => beep(f, .22, 'triangle', .35, i*.12)); }
+            else if (type === 'legendary') { [523,659,784,1047,1319].forEach((f,i) => beep(f, .28, 'square', .35, i*.12)); }
+        }
+        document.addEventListener('click', e => {
+            if (e.target.closest('.pixel-btn, .av, .pick-cell, .mini, .lever')) playSound('click');
+        });
 
         // ===== ЭФФЕКТЫ =====
         function flashReels(cls) {
@@ -872,7 +905,7 @@
             void strip.offsetWidth;
             reelEl.classList.add('spinning');
         }
-        function stopReel(reelEl, chosen) {
+        function stopReel(reelEl, chosen, idx) {
             reelEl.classList.remove('spinning');
             const strip = reelEl.querySelector('.reel-strip');
             buildStrip(strip, chosen);
@@ -881,7 +914,7 @@
             void strip.offsetWidth;
             strip.style.transition = 'transform .5s cubic-bezier(.2,1.6,.4,1)';
             strip.style.transform = 'translateY(-12.5%)';
-            playSound('spin');
+            playSound('stop', idx);
         }
 
         function getRarity() {
@@ -930,22 +963,26 @@
             m.classList.remove('hidden'); m.classList.add('active');
             applySkin();
             document.getElementById('machineMode').textContent = modeLabel;
-            coins = coinsCount;
+            const maxCoins = mode === 'base' ? 4 : 1;
+            coins = Math.min(coinsCount, maxCoins);
             [1,2,3].forEach(i => setIdle(document.getElementById('reel'+i)));
             updateCoins();
         }
         function startMachine() {
+            if (state.baseDone) { playSound('deny'); return; }
             mode = 'base'; cards = [];
             enterMachine(3, 'РЕЖИМ: ТРИ ЖЕЛАНИЯ');
             playSound('coin'); track('intro_view');
         }
         function startDaily() {
+            if (state.daily[todayStr()]) { playSound('deny'); return; }
             mode = 'daily'; cards = [];
             pendingDaily = dailyCardFor(todayStr());
             enterMachine(1, 'РЕЖИМ: ЕЖЕДНЕВНОЕ ЖЕЛАНИЕ · ' + dateRu(todayStr()));
             playSound('coin'); track('daily_start');
         }
         function startBonus() {
+            if (state.shop.lastBonusDate === todayStr()) { playSound('deny'); return; }
             mode = 'bonus'; cards = [];
             enterMachine(1, 'РЕЖИМ: БОНУСНОЕ ЖЕЛАНИЕ 🎁');
             playSound('coin'); track('bonus_start');
@@ -969,6 +1006,28 @@
                 s.className = 'coin'; s.textContent = '🪙';
                 d.appendChild(s);
             }
+        }
+
+        // ===== АНТИЧИТ: ПРОВЕРКА СВЕЖЕГО ХРАНИЛИЩА ПЕРЕД СПИНОМ =====
+        function freshDeny() {
+            try {
+                const fresh = JSON.parse(localStorage.getItem(LS_STATE) || 'null');
+                if (!fresh) return false;
+                const today = todayStr();
+                if (mode === 'daily' && fresh.lastDaily === today) {
+                    coins = 0; updateCoins();
+                    showBanner('⛔ СЕГОДНЯ УЖЕ ПОЛУЧЕНО', '#ff5555'); playSound('deny'); return true;
+                }
+                if (mode === 'base' && fresh.baseDone) {
+                    coins = 0; updateCoins();
+                    showBanner('⛔ РИТУАЛ УЖЕ ЗАВЕРШЁН', '#ff5555'); playSound('deny'); return true;
+                }
+                if (mode === 'bonus' && fresh.shop && fresh.shop.lastBonusDate === today) {
+                    coins = 0; updateCoins();
+                    showBanner('⛔ БОНУС УЖЕ ИСПОЛЬЗОВАН', '#ff5555'); playSound('deny'); return true;
+                }
+            } catch(e) {}
+            return false;
         }
 
         // ===== ДОСТИЖЕНИЯ: ПРОВЕРКИ =====
@@ -1020,7 +1079,8 @@
 
         function spin() {
             if (spinning || coins <= 0) return;
-            spinning = true; coins--; updateCoins(); playSound('coin'); shakeMachine();
+            if (freshDeny()) { spinning = false; return; }
+            spinning = true; coins--; updateCoins(); playSound('lever'); shakeMachine();
             if (navigator.vibrate) navigator.vibrate(50);
             const lever = document.getElementById('lever');
             lever.classList.add('disabled', 'pulled');
@@ -1030,16 +1090,16 @@
             track(mode === 'daily' ? 'daily_spin' : 'spin_' + (mode === 'base' ? (3 - coins) : 'bonus'));
             spinSyms = [];
 
-            setTimeout(() => { const s = randSym(); spinSyms[0] = s; stopReel(reels[0], s); }, 1000);
-            setTimeout(() => { const s = randSym(); spinSyms[1] = s; stopReel(reels[1], s); }, 1500);
+            setTimeout(() => { const s = randSym(); spinSyms[0] = s; stopReel(reels[0], s, 0); }, 1000);
+            setTimeout(() => { const s = randSym(); spinSyms[1] = s; stopReel(reels[1], s, 1); }, 1500);
             setTimeout(() => {
                 let card;
                 if (mode === 'daily') {
                     card = pendingDaily;
-                    stopReel(reels[2], card.symbol);
+                    stopReel(reels[2], card.symbol, 2);
                 } else {
                     const sym = randSym();
-                    stopReel(reels[2], sym);
+                    stopReel(reels[2], sym, 2);
                     const combo = spinSyms[0].name === sym.name && spinSyms[1].name === sym.name;
                     let rarity = getRarity();
                     if (combo) {
@@ -1147,6 +1207,7 @@
                         '<div class="card-bg-name">фон: ' + bg.name + '</div>';
                     drawSymbol(el.querySelector('canvas'), sym);
                     box.appendChild(el);
+                    setTimeout(() => playSound('flip'), 300 + i * 350);
                 } catch(e) {}
             });
 
@@ -1243,11 +1304,12 @@
         }
         function buyItem(id) {
             const item = SHOP.find(x => x.id === id);
-            if (!item || state.dust < item.price) return;
-            if (id === 'bonus_wish' && state.shop.lastBonusDate === todayStr()) return;
-            if (id === 'insurance' && state.shop.insurance >= 2) return;
+            if (!item || state.dust < item.price) { playSound('deny'); return; }
+            if (id === 'bonus_wish' && state.shop.lastBonusDate === todayStr()) { playSound('deny'); return; }
+            if (id === 'insurance' && state.shop.insurance >= 2) { playSound('deny'); return; }
             state.dust -= item.price;
             unlock('shopper');
+            playSound('buy');
             if (id === 'bonus_wish') {
                 state.shop.lastBonusDate = todayStr();
                 saveState(); updateDust();
@@ -1274,10 +1336,11 @@
             }
             track('buy_' + id);
         }
-        function selectSkin(id) { state.shop.skin = id; saveState(); applySkin(); renderShop(); }
-        function selectFrame() { state.shop.frame = 'frame_gold'; saveState(); renderShop(); renderProfile(); }
+        function selectSkin(id) { state.shop.skin = id; saveState(); applySkin(); playSound('click'); renderShop(); }
+        function selectFrame() { state.shop.frame = 'frame_gold'; saveState(); playSound('click'); renderShop(); renderProfile(); }
 
         function mysteryBox() {
+            playSound('box');
             const r = Math.random();
             if (r < 0.5) {
                 const d = 5 + Math.floor(Math.random()*36);
@@ -1321,7 +1384,7 @@
             countUnique(card);
             saveState();
             showBanner('📦 ЗАКАЗ ДОСТАВЛЕН: ' + sym.name.toUpperCase(), '#4dff88');
-            playSound('win');
+            playSound('flip');
             setTimeout(() => openCardModal([card], 0), 1200);
         }
 
@@ -1368,6 +1431,7 @@
             state.profile.avatar = avatarSel;
             saveState();
             unlock('profile_set');
+            playSound('buy');
             document.getElementById('pEdit').classList.add('hidden');
             renderProfile();
         }
